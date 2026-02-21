@@ -1,14 +1,262 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
-  <link href='/style.css' rel='stylesheet'>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로또 번호 생성기</title>
+
+<style>
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:#dcdcdc;
+    font-family:"Courier New", monospace;
+    display:flex;
+    justify-content:center;
+    padding:40px 10px;
+  }
+
+  .ticket{
+    width:100%;
+    max-width:540px;
+    background:#fffdf5;
+    padding:25px 18px;
+    box-shadow:0 15px 40px rgba(0,0,0,0.2);
+    border-radius:6px;
+  }
+
+  h1{
+    text-align:center;
+    margin:0 0 14px;
+    font-size:20px;
+    letter-spacing:2px;
+  }
+
+  .controls{
+    text-align:center;
+    margin-bottom:14px;
+  }
+
+  button{
+    padding:8px 16px;
+    border:1px solid #000;
+    background:#fff;
+    cursor:pointer;
+    font-weight:bold;
+    margin:0 4px;
+  }
+  button:active{ background:#eee; }
+
+  .board{
+    margin-top:10px;
+    border-top:1px dashed #aaa;
+    padding-top:12px;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap:6px;
+    justify-items:center;
+  }
+
+  .ball{
+    width:32px;
+    height:32px;
+    border:1px solid #000;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    background:#fff;
+    user-select:none;
+  }
+
+  .ball.checked{
+    background:#000;
+    color:#fff;
+  }
+
+  .footer{
+    margin-top:15px;
+    border-top:1px dashed #aaa;
+    padding-top:10px;
+    font-size:13px;
+  }
+
+  .meta{
+    text-align:center;
+    font-size:12px;
+    margin-top:10px;
+  }
+
+  .history{
+    margin-top:18px;
+    border-top:2px solid #000;
+    padding-top:10px;
+    font-size:12px;
+  }
+
+  .historyList{
+    max-height:180px;
+    overflow-y:auto;
+  }
+
+  .history-item{
+    padding:6px 0;
+    border-top:1px dashed rgba(0,0,0,0.25);
+  }
+  .history-item:first-child{ border-top:none; }
+
+  /* Mobile optimization */
+  @media (max-width: 480px) {
+    body{
+      padding:18px 10px;
+    }
+
+    .ticket{
+      padding:18px 14px;
+    }
+
+    h1{
+      font-size:16px;
+      letter-spacing:1px;
+    }
+
+    button{
+      padding:8px 12px;
+      margin:4px 3px;
+      font-size:13px;
+    }
+
+    .grid{
+      gap:4px;
+    }
+
+    .ball{
+      width:26px;
+      height:26px;
+      font-size:11px;
+    }
+
+    .historyList{
+      max-height:160px;
+    }
+  }
+</style>
 </head>
+
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+  <div class="ticket">
+    <h1>LOTTO 6/45</h1>
+
+    <div class="controls">
+      <button onclick="generate()">번호 생성</button>
+      <button onclick="clearHistory()">기록 삭제</button>
+    </div>
+
+    <div id="boards"></div>
+
+    <div class="footer">
+      ✔ 자동 선택<br>
+      <span id="bonus"></span>
+    </div>
+
+    <div class="meta" id="meta"></div>
+
+    <div class="history">
+      <strong>📜 생성 기록</strong>
+      <div class="historyList" id="historyList"></div>
+    </div>
+  </div>
+
+<script>
+  // 🔐 암호학적 난수 생성
+  function secureRandomInt(max) {
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    return array[0] % max;
+  }
+
+  // 🔐 강한 난수 기반 셔플
+  function drawNumbers(n, max=45){
+    const arr = Array.from({length:max}, (_,i)=>i+1);
+
+    for(let i=arr.length-1;i>0;i--){
+      const j = secureRandomInt(i+1);
+      [arr[i],arr[j]] = [arr[j],arr[i]];
+    }
+
+    return arr.slice(0,n);
+  }
+
+  function createBoard(selected){
+    const board = document.createElement("div");
+    board.className = "board";
+
+    const grid = document.createElement("div");
+    grid.className = "grid";
+
+    for(let i=1;i<=45;i++){
+      const ball = document.createElement("div");
+      ball.className = "ball";
+      ball.textContent = i;
+      if(selected.includes(i)) ball.classList.add("checked");
+      grid.appendChild(ball);
+    }
+
+    board.appendChild(grid);
+    return board;
+  }
+
+  function saveHistory(text){
+    const key = "lottoHistory";
+    const history = JSON.parse(localStorage.getItem(key) || "[]");
+    history.unshift(text);
+    localStorage.setItem(key, JSON.stringify(history));
+    loadHistory();
+  }
+
+  function loadHistory(){
+    const history = JSON.parse(localStorage.getItem("lottoHistory") || "[]");
+    const list = document.getElementById("historyList");
+    list.innerHTML = "";
+    history.forEach(item=>{
+      const div = document.createElement("div");
+      div.className = "history-item";
+      div.textContent = item;
+      list.appendChild(div);
+    });
+  }
+
+  function clearHistory(){
+    localStorage.removeItem("lottoHistory");
+    loadHistory();
+  }
+
+  function generate(){
+    const boards = document.getElementById("boards");
+    boards.innerHTML = "";
+
+    const picked = drawNumbers(7,45);
+    const main = picked.slice(0,6).sort((a,b)=>a-b);
+    const bonus = picked[6];
+
+    boards.appendChild(createBoard(main));
+
+    const now = new Date();
+    const time = now.toLocaleString("ko-KR");
+
+    document.getElementById("bonus").textContent = "보너스 번호 : " + bonus;
+    document.getElementById("meta").textContent = "생성 시각 : " + time;
+
+    saveHistory(`[${time}] ${main.join(", ")} + ${bonus}`);
+  }
+
+  loadHistory();
+  generate();
+</script>
 </body>
 </html>
